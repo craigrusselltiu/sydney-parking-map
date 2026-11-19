@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#152b31" />
+    <meta
+      name="description"
+      content="Explore Sydney parking meters, mobility bays and public car parks. Check published parking hours, capacity and source details."
+    />
+    <title>Kerb Atlas · Sydney parking map</title>
+    <link rel="icon" href="./assets/mark.svg" />
+    <link rel="stylesheet" href="./assets/maplibre-gl.css" />
+    <link rel="stylesheet" href="./style.css" />
+    <script defer src="./assets/maplibre-gl.js"></script>
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Kerb Atlas home"
+        ><img alt="" src="./assets/mark.svg" width="37" height="37" /><span
+          >Kerb Atlas</span
+        ></a
+      >
+      <nav aria-label="Main navigation">
+        <button id="explore" aria-pressed="true">
+          <i data-i="map"></i><span class="desktop-word">Explore map</span
+          ><span class="mobile-word">Map</span>
+        </button>
+        <button id="saved" aria-pressed="false">
+          <i data-i="bookmark"></i>Saved<span id="saved-count" hidden></span>
+        </button>
+      </nav>
+      <div class="header-end">
+        <span id="clock"></span
+        ><button class="about-button" id="about">
+          <i data-i="info"></i><span>About the data</span>
+        </button>
+      </div>
+    </header>
+    <main>
+      <aside id="sidebar" aria-label="Parking explorer">
+        <section id="finder">
+          <div class="intro">
+            <div class="eyebrow"><i data-i="pin"></i> SYDNEY, NSW</div>
+            <h1 id="page-title">Find parking</h1>
+            <div class="search">
+              <i data-i="search"></i
+              ><input
+                id="query"
+                type="search"
+                placeholder="Search a street, suburb or car park"
+                aria-label="Search a street, suburb or car park"
+              />
+            </div>
+            <div class="tabs" aria-label="Parking type">
+              <button data-type="all" aria-pressed="true">All</button
+              ><button data-type="street" aria-pressed="false">
+                <i data-i="road"></i>Street parking</button
+              ><button data-type="garage" aria-pressed="false">
+                <i data-i="parking"></i>Car parks
+              </button>
+            </div>
+          </div>
+          <div class="results-bar">
+            <h2 id="results-title">In this area</h2>
+            <span id="result-count" aria-live="polite">Loading…</span>
+          </div>
+          <div id="results" tabindex="0" aria-label="Parking locations"></div>
+        </section>
+        <section id="detail" hidden aria-label="Selected location"></section>
+        <button id="coverage" class="coverage">
+          <i data-i="info"></i
+          ><span>Partial coverage · Check the signs on site</span
+          ><i data-i="chevron"></i>
+        </button>
+      </aside>
+      <section class="map-area" aria-label="Interactive parking map">
+        <div id="map"></div>
+        <div class="map-top">
+          <button
+            id="resetmap"
+            class="map-location"
+            title="Return to Sydney CBD"
+            aria-label="Return to Sydney CBD"
+          >
+            <span class="locator"></span><span>City of Sydney</span></button
+          ><button
+            id="layers-button"
+            aria-controls="layers"
+            aria-expanded="false"
+            class="map-btn"
+          >
+            <i data-i="layers"></i><span>Layers</span>
+          </button>
+        </div>
+        <section id="layers" hidden class="float-panel" aria-label="Map layers">
+          <h2>Map layers</h2>
+          <label
+            ><input id="meters" type="checkbox" checked /> Parking meters</label
+          >
+          <label
+            ><input id="mobility" type="checkbox" checked /> Mobility
+            bays</label
+          >
+          <label
+            ><input id="garages" type="checkbox" checked /> Public car
+            parks</label
+          >
+          <label
+            ><input id="sections" type="checkbox" checked /> Street
+            sections</label
+          ><label
+            ><input id="historical" type="checkbox" /> Loading zones
+            <small>2018 survey</small></label
+          >
+        </section>
+        <div id="map-status" role="status" hidden></div>
+        <div class="map-controls">
+          <button
+            id="recenter"
+            title="Find my location"
+            aria-label="Find my location"
+          >
+            <i data-i="focus"></i>
+          </button>
+          <div class="zoom">
+            <button id="zoomin" aria-label="Zoom in">
+              <i data-i="plus"></i></button
+            ><button id="zoomout" aria-label="Zoom out">
+              <i data-i="minus"></i>
+            </button>
+          </div>
+        </div>
+        <div class="legend">
+          <span><b class="legend-street"></b>Meter</span
+          ><span><b class="legend-mobility"></b>Mobility</span
+          ><span><b class="legend-park">P</b>Car park</span
+          ><span id="legend-section"><b class="legend-section"></b>Section</span
+          ><span id="legend-driveway" hidden
+            ><b class="legend-driveway"></b>Driveway</span
+          ><span id="legend-historical" hidden
+            ><b class="legend-historical"></b>2018 zone</span
+          >
+        </div>
+        <div id="tooltip" role="tooltip" hidden></div>
+      </section>
+    </main>
+    <dialog id="info-dialog">
+      <div class="dialog-heading">
+        <div class="eyebrow">KERB ATLAS</div>
+        <button id="close-info" class="icon-btn" aria-label="Close">
+          <i data-i="x"></i>
+        </button>
+      </div>
+      <h2>About the data</h2>
+      <p>
+        Use the map to plan a stop. At the kerb, check the signs on your side of
+        the street and keep driveways clear.
+      </p>
+      <div id="source-details"></div>
+      <p class="footnote">
+        <a
+          href="https://www.nsw.gov.au/driving-boating-and-transport/driving-nsw/roads-safety-and-rules/parking/parking-rules"
+          target="_blank"
+          rel="noopener"
+          >NSW parking rules</a
+        >
+      </p>
+    </dialog>
+    <noscript>Enable JavaScript to use the parking map.</noscript>
+  </body>
+</html>

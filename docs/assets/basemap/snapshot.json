@@ -1,0 +1,10 @@
+{
+  "tiles": "https://tiles.openfreemap.org/planet/20261115_080022_pt/{z}/{x}/{y}.pbf",
+  "bounds": [
+    151.14,
+    -33.94,
+    151.255,
+    -33.835
+  ],
+  "tileCount": 55
+}
