@@ -1,4 +1,4 @@
-"""Refresh the Sydney garage directory using Python's standard library.
+"""Refresh the Sydney garage directory from reviewed and community-mapped sources.
 
 The allowlist contains public hourly facilities reviewed on 19 November 2026.
 Recheck venue facts and dated capacity references before changing REVIEWED.
@@ -7,10 +7,15 @@ An incomplete upstream response leaves the previous snapshot in place.
 
 import json
 import re
+import argparse
 from datetime import date
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from urllib.request import Request, urlopen
+from shapely.geometry import Point
+
+from metro_geography import Metro, SOURCE as GEOGRAPHY
+from metro_garages import PARK_RIDE_DATA, add_nearby_roads, council_listings, park_and_ride, inventory, merged_inventory
 
 
 OUTPUT = Path(__file__).resolve().parents[1] / "docs/data/garages.json"
@@ -176,6 +181,11 @@ def osm_facilities():
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("pbf", type=Path, help="Geofabrik New South Wales .osm.pbf extract")
+    parser.add_argument("--cache", type=Path, help="Directory for ABS GCCSA and locality polygons (default: alongside PBF)")
+    args = parser.parse_args()
+    metro = Metro(args.cache or args.pbf.parent)
     features = [*wilson_facilities(), *council_facilities(), *first_parking_facilities(), *osm_facilities()]
     # Entrance coordinates from section 3.1 of ICC Sydney's event guidelines.
     features.append(facility(
@@ -184,6 +194,17 @@ def main():
         "14 Darling Drive, Darling Harbour", "ICC Sydney", "https://iccsydney.com.au/visitors/getting-here/",
         "24 hours daily", (620, "ICC Sydney", ICC), ICC_GPS,
     ))
+    features.extend(council_listings(fetch))
+    features.extend(park_and_ride(metro))
+    for r in features:
+        point = Point(r["lon"], r["lat"])
+        if not metro.prepared.covers(point):
+            raise ValueError(f"Outside the Greater Sydney boundary: {r['name']}")
+        r.setdefault("suburb", metro.locality(point))
+    candidates, extract_date = inventory(args.pbf, metro)
+    community = merged_inventory(candidates, features)
+    add_nearby_roads(community, args.pbf)
+    features.extend(community)
     sources = [
         {"name": "City of Sydney · Council car parks", "url": CITY, "license": "CC BY 4.0",
          "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"},
@@ -191,7 +212,10 @@ def main():
          "license": "Individual factual references linked on each facility."},
         {"name": "© OpenStreetMap contributors · selected location and tag records",
          "url": "https://www.openstreetmap.org/copyright", "license": "ODbL 1.0",
-         "licenseUrl": "https://opendatacommons.org/licenses/odbl/1-0/"},
+         "licenseUrl": "https://opendatacommons.org/licenses/odbl/1-0/", "extractDate": extract_date,
+         "download": "https://download.geofabrik.de/australia-oceania/australia/new-south-wales.html"},
+        {"name": "Transport for NSW · Park&Ride", "url": PARK_RIDE_DATA, "license": "Creative Commons Attribution",
+         "licenseUrl": "https://opendata.transport.nsw.gov.au/data/licence"}, GEOGRAPHY,
     ]
     payload = {"updated": REVIEWED, "retrieved": date.today().isoformat(), "sources": sources,
                "features": sorted(features, key=lambda f: f["name"])}
@@ -201,6 +225,7 @@ def main():
         temp.write("\n")
     Path(temp.name).replace(OUTPUT)
     print(f"Wrote {len(features)} public car parks with {sum(f['capacity'] is not None for f in features)} documented capacities")
+    print(f"{len(community)} community-mapped car parks after deduplication")
 
 
 if __name__ == "__main__":

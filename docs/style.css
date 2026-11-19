@@ -980,3 +980,235 @@ dialog ul {
     overflow: auto;
   }
 }
+.theme-btn {
+  color: white;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  border: 1px solid #46645f;
+}
+.theme-btn:hover {
+  background: #345452;
+}
+.areas-panel {
+  left: 18px;
+  right: auto;
+}
+.areas-panel button,
+.destinations button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 8px;
+  text-align: left;
+  font-size: 14px;
+  border-radius: 5px;
+}
+.areas-panel button:hover,
+.destinations button:hover {
+  background: #e7f3ef;
+}
+.destinations {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 4px;
+  margin-top: 5px;
+}
+.destinations small {
+  color: var(--muted);
+  font-weight: 450;
+  margin-left: auto;
+}
+.legend-timed,
+.legend-restricted,
+.legend-section {
+  width: 15px;
+  border-top: 3px solid #b3680c;
+}
+.legend-section {
+  border-color: #007d65;
+}
+.legend-restricted {
+  border-color: #bd424c;
+}
+.map-area {
+  background: #eef2ea;
+}
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --dark: #e1efed;
+  --muted: #afc1c1;
+  --rule: #364b50;
+  color: #dfebeb;
+  background: #132127;
+}
+[data-theme='dark'] .topbar {
+  background: #0e1d23;
+  border-bottom: 1px solid #32484b;
+}
+[data-theme='dark'] aside,
+[data-theme='dark'] #finder,
+[data-theme='dark'] dialog,
+[data-theme='dark'] #detail {
+  background: #17272d;
+  color: #e5efed;
+  border-color: #32474c;
+}
+[data-theme='dark'] .map-area {
+  background: #19282d;
+}
+[data-theme='dark'] .search,
+[data-theme='dark'] .tabs button,
+[data-theme='dark'] .more,
+[data-theme='dark'] .save-action,
+[data-theme='dark'] .card {
+  background: #1e3239;
+  border-color: #385056;
+  color: #dcebea;
+}
+[data-theme='dark'] .search:focus-within {
+  outline-color: #7edbb8;
+}
+[data-theme='dark'] .search input::placeholder,
+[data-theme='dark'] .search svg,
+[data-theme='dark'] .results-bar > span,
+[data-theme='dark'] .icon-btn,
+[data-theme='dark'] .save-row,
+[data-theme='dark'] .detail-address,
+[data-theme='dark'] .note,
+[data-theme='dark'] dialog p,
+[data-theme='dark'] .footnote,
+[data-theme='dark'] .rule-preview,
+[data-theme='dark'] .maplibregl-ctrl-attrib a {
+  color: #b7c9cb;
+}
+[data-theme='dark'] .tabs button[aria-pressed='true'] {
+  background: #c9ed98;
+  color: #152e2a;
+  border-color: #c9ed98;
+}
+[data-theme='dark'] .eyebrow,
+[data-theme='dark'] .back,
+[data-theme='dark'] a:not(.brand) {
+  color: #a7dfc7;
+}
+[data-theme='dark'] .card:hover,
+[data-theme='dark'] .areas-panel button:hover,
+[data-theme='dark'] .destinations button:hover,
+[data-theme='dark'] .save-row:hover,
+[data-theme='dark'] .icon-btn:hover {
+  background: #284148;
+  border-color: #668980;
+}
+[data-theme='dark'] .section {
+  --tint: #21473c;
+  --ink: #9be2c4;
+}
+[data-theme='dark'] .garage {
+  --tint: #2c3a62;
+  --ink: #c0d2ff;
+}
+[data-theme='dark'] .mobility {
+  --tint: #413350;
+  --ink: #e4c8fc;
+}
+[data-theme='dark'] .kerb {
+  --tint: #523f2a;
+  --ink: #ffcf89;
+}
+[data-theme='dark'] .meta-chip {
+  color: #c0d0ce;
+  background: #33474b;
+}
+[data-theme='dark'] .coverage,
+[data-theme='dark'] .map-location,
+[data-theme='dark'] .map-btn,
+[data-theme='dark'] .map-controls button,
+[data-theme='dark'] .legend,
+[data-theme='dark'] .float-panel,
+[data-theme='dark'] #tooltip,
+[data-theme='dark'] #map-status {
+  color: #e0ebeb;
+  background: #192c32;
+  border-color: #41585c;
+}
+[data-theme='dark'] .zoom {
+  border-color: #41585c;
+}
+[data-theme='dark'] .locator {
+  background: #96dfa6;
+  box-shadow: 0 0 0 3px #304940;
+}
+[data-theme='dark'] .legend-section {
+  border-color: #58d9b6;
+}
+[data-theme='dark'] .legend-timed {
+  border-color: #ffcb77;
+}
+[data-theme='dark'] .legend-restricted {
+  border-color: #ff8f91;
+}
+[data-theme='dark'] .legend-driveway {
+  border-color: #f79b89;
+}
+[data-theme='dark'] .maplibregl-ctrl-attrib {
+  background: #14252be6 !important;
+  color: #afc1c1;
+}
+[data-theme='dark'] .maplibregl-ctrl-attrib-button {
+  background-color: #b1c5c3;
+}
+[data-theme='dark'] .maplibregl-ctrl-scale {
+  background: #183239d9 !important;
+  color: #c2d7d7 !important;
+  border-color: #aec2bf !important;
+}
+[data-theme='dark'] .save-action[aria-pressed='true'],
+[data-theme='dark'] .save-row[aria-pressed='true'] {
+  color: #c8e99c;
+}
+@media (max-width: 680px) {
+  .theme-btn {
+    width: 29px;
+    height: 29px;
+    margin-right: 4px;
+  }
+  .areas-panel {
+    left: 10px;
+  }
+  .topbar nav {
+    gap: 10px;
+  }
+  .header-end {
+    margin-left: 8px;
+  }
+  .destinations {
+    max-height: 95px;
+    overflow: auto;
+  }
+  .map-top .float-panel {
+    height: auto;
+  }
+  .legend {
+    column-gap: 8px;
+  }
+}
+.legend-unknown {
+  width: 15px;
+  border-top: 3px solid #657d8a;
+}
+[data-theme='dark'] .legend-unknown {
+  border-color: #a5bfcc;
+}
+@media (max-width: 680px) {
+  .legend {
+    max-width: calc(100% - 65px);
+    row-gap: 4px;
+  }
+  .legend span {
+    gap: 4px;
+  }
+}

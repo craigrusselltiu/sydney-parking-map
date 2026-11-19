@@ -1,4 +1,6 @@
 const paths = {
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2"/>',
+  moon: '<path d="M21 14A9 9 0 0 1 10 3a9 9 0 1 0 11 11z"/>',
   map: '<path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2zM9 3v16m6-14v16"/>',
   bookmark: '<path d="M6 4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17l-6-4-6 4z"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-9v.1"/>',

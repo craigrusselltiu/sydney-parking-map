@@ -12,8 +12,6 @@ from zipfile import ZipFile
 
 TARGET = Path(__file__).resolve().parents[1] / "docs/data/kerbs.json"
 ITEMS = "https://www.arcgis.com/home/item.html?id="
-METER_ID = "71bb12507a3240c4b12e7fbba5be58e1"
-METERS = f"https://utility.arcgis.com/usrsvcs/servers/{METER_ID}/rest/services/ParkingMeters/ParkingMeters/MapServer"
 MOBILITY = "https://services1.arcgis.com/cNVyNtjGVZybOQWZ/arcgis/rest/services/Mobility_parking/FeatureServer/1"
 LOADING_CATALOG = "https://opendata.transport.nsw.gov.au/data/api/3/action/package_show?id=loading-zones-kerbside"
 CC_BY = "https://creativecommons.org/licenses/by/4.0/"
@@ -21,8 +19,6 @@ CC_BY = "https://creativecommons.org/licenses/by/4.0/"
 
 def fetch(url):
     headers = {"User-Agent": "SydneyParkingMap/1.0"}
-    if url.startswith(METERS):
-        headers["Referer"] = "https://cityofsydney.maps.arcgis.com/"
     with urlopen(Request(url, headers=headers), timeout=60) as response:
         return response.read()
 
@@ -68,37 +64,6 @@ def clean(text):
 
 def title(text):
     return text.title() if text.isupper() else text
-
-
-def meter_rule(raw):
-    match = re.fullmatch(r"(\d+(?:/\d+)?)P (\d+(?::\d+)?(?:AM|PM))-(\d+(?::\d+)?(?:AM|PM)) (.+?), (\$[\d.]+) /HR", raw)
-    if not match:
-        return raw
-    limit, start, end, days, rate = match.groups()
-    duration = {"1/4": "15 min", "1/2": "30 min", "1": "1 hour"}.get(limit, f"{limit} hours")
-    days = days.title().replace("Public Holidays", "public holidays").replace("-", "–")
-    time = "all day" if start == end == "12AM" else f"{start.lower()}–{end.lower()}"
-    return f"{days}, {time} · {duration} max · {rate}/hr"
-
-
-def meters():
-    free_ticket_ids = {f["attributes"]["Meter_ID"] for f in read_layer(METERS + "/79")}
-    for feature in read_layer(METERS + "/78"):
-        a = feature["attributes"]
-        rules = [meter_rule(r) for r in map(clean, (a["Popup"] or "").split(";")) if r]
-        if a["Meter_ID"] in free_ticket_ids:
-            rules.insert(0, "Free 15-minute ticket. Buy a paid ticket on arrival for a longer stay.")
-        if a["Status_ID"] != 1:
-            status = {4: "out of operation", 5: "shut down"}.get(a["Status_ID"], "status unknown")
-            rules.insert(0, f"Meter {status} at snapshot date.")
-        yield {
-            "id": f"meter-{a['Meter_ID']}", "kind": "meter", "source": "meters",
-            "name": title(clean(a["Street"])), "area": title(clean(a["Suburb"])),
-            "location": f"Meter {a['Meter_ID']} · {a['Location_ID']}",
-            "geometry": point(feature["geometry"]),
-            "rules": rules or ["Meter times unavailable. Check the signs."],
-            "spaces": a["ApproxPaySpaces"],
-        }
 
 
 def mobility():
@@ -171,13 +136,10 @@ def load_zones():
 
 def main():
     loading, file_date, modified = load_zones()
-    features = [*meters(), *mobility(), *loading]
+    features = [*mobility(), *loading]
     if len({r["id"] for r in features}) != len(features):
         raise ValueError("Duplicate record ID")
     sources = {
-        "meters": {"name": "City of Sydney · Parking meters", "url": ITEMS + METER_ID,
-                   "license": "CC BY 4.0", "licenseUrl": CC_BY,
-                   "note": "Meter positions, published tariffs and approximate spaces. Sign boundaries and driveway gaps are unverified."},
         "mobility": {"name": "City of Sydney · Mobility parking", "url": ITEMS + "2671fdce3f354b3e8f02236ca12271cb",
                      "license": "CC BY 4.0", "licenseUrl": CC_BY,
                      "note": "Designated mobility bays. Each record includes the council’s audit date when available."},

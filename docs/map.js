@@ -1,281 +1,361 @@
-const HOME = [151.2076, -33.868];
-const CITY = [
-  [151.14, -33.94],
-  [151.255, -33.835],
+import { prepareBasemap, applyBasemapTheme } from './assets/basemap-source.js';
+
+const REGION = [
+  [149.95, -34.36],
+  [151.66, -32.97],
 ];
-const pointLayers = ['parking-symbols', 'parking-dots', 'zones', 'zone-edges'];
+const OVERVIEW = [
+  [150.64, -34.1],
+  [151.31, -33.64],
+];
 const $ = (id) => document.getElementById(id);
 const collection = (features) => ({ type: 'FeatureCollection', features });
-const feature = (geometry, properties) => ({
+const feature = (r) => ({
   type: 'Feature',
-  geometry,
-  properties,
+  geometry: r.geometry,
+  properties: {
+    id: r.id,
+    kind: r.kind,
+    side: r.side || '',
+    status: r.status || 'unknown',
+  },
 });
-
+const width = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  9,
+  1.2,
+  13,
+  2,
+  16,
+  3.2,
+  19,
+  5,
+];
+const side = ['match', ['get', 'side'], 'right', 1, 'left', -1, 0];
+// Offset the two sides of an OSM road independently. Council kerb lines and bay footprints already have positions.
+const offset = [
+  'interpolate',
+  ['exponential', 1.45],
+  ['zoom'],
+  9,
+  ['*', side, 1],
+  13,
+  ['*', side, 2.4],
+  15,
+  ['*', side, 4],
+  17,
+  ['*', side, 8.5],
+  20,
+  ['*', side, 30],
+];
+function lineColour(dark) {
+  return [
+    'case',
+    ['==', ['get', 'kind'], 'kerb'],
+    '#b77c38',
+    [
+      'match',
+      ['get', 'status'],
+      'parking',
+      dark ? '#58d9b6' : '#007d65',
+      'mixed',
+      dark ? '#ffcb77' : '#b3680c',
+      'restricted',
+      dark ? '#ff8f91' : '#bd424c',
+      dark ? '#a5bfcc' : '#657d8a',
+    ],
+  ];
+}
+function drivewayLine(d) {
+  // Expose only the approach to the kerb. The styling represents a connection, not its surveyed width.
+  const [x, y] = d.point,
+    dx = d.toward[0] - x,
+    dy = d.toward[1] - y;
+  const length = Math.hypot(dx * Math.cos((y * Math.PI) / 180), dy) * 111195;
+  const scale = Math.min(1, 14 / (length || 1));
+  return {
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: [d.point, [x + dx * scale, y + dy * scale]],
+    },
+    properties: { way: d.way },
+  };
+}
 function markerImage(map, kind) {
   const canvas = document.createElement('canvas');
-  canvas.width = 68;
-  canvas.height = 68;
+  canvas.width = canvas.height = 64;
   const ctx = canvas.getContext('2d');
   ctx.scale(2, 2);
-  ctx.shadowColor = '#1b353a55';
-  ctx.shadowBlur = 3;
-  ctx.shadowOffsetY = 1;
-  ctx.fillStyle = {
-    garage: '#345ed3',
-    meter: '#007d71',
-    mobility: '#8050aa',
-    kerb: '#a56622',
-    section: '#287859',
-  }[kind];
-  ctx.strokeStyle = 'white';
-  ctx.lineWidth = 1.7;
+  ctx.fillStyle = kind === 'garage' ? '#365dd4' : '#7650a0';
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.8;
   ctx.beginPath();
-  if (kind === 'meter' || kind === 'section')
-    ctx.arc(17, 17, 7, 0, Math.PI * 2);
-  else if (kind === 'mobility') ctx.roundRect(10, 10, 14, 14, 4);
-  else ctx.roundRect(4, 3, 26, 27, 7);
+  ctx.roundRect(3, 3, 26, 26, 7);
   ctx.fill();
-  ctx.shadowColor = 'transparent';
   ctx.stroke();
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  if (kind === 'garage') {
-    ctx.font = 'bold 19px Arial';
-    ctx.fillText('P', 17, 17.5);
-  } else if (kind === 'mobility') {
-    ctx.font = 'bold 11px Arial';
-    ctx.fillText('♿︎', 17, 17.5);
-  } else if (kind === 'meter') {
-    ctx.beginPath();
-    ctx.arc(17, 17, 1.7, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  map.addImage(kind, ctx.getImageData(0, 0, 68, 68), { pixelRatio: 2 });
+  ctx.font = 'bold 19px Arial';
+  ctx.fillText(kind === 'garage' ? 'P' : '♿︎', 16, 17);
+  map.addImage(kind, ctx.getImageData(0, 0, 64, 64), { pixelRatio: 2 });
 }
 export async function parkingMap({ onMove, onPick, onHover, onDriveway }) {
-  const styleResponse = await fetch('./assets/map-style.json');
-  if (!styleResponse.ok) throw Error('Street map could not load.');
-  const style = await styleResponse.json();
-  style.sources.city.tiles = [
-    new URL('assets/basemap/tiles/', document.baseURI).href + '{z}/{x}/{y}.pbf',
-  ];
-  style.glyphs =
-    new URL('assets/basemap/glyphs/', document.baseURI).href +
-    '{fontstack}/{range}.pbf';
+  const response = await fetch('./assets/map-style.json');
+  if (!response.ok) throw Error('Map style unavailable');
+  const style = await response.json();
+  const transformRequest = await prepareBasemap(
+    style,
+    document.documentElement.dataset.theme === 'dark',
+  );
   const map = new maplibregl.Map({
     container: 'map',
     style,
-    center: HOME,
-    zoom: 14.2,
-    maxBounds: CITY,
-    minZoom: 10,
+    transformRequest,
+    center: [151.100585, -33.704025],
+    zoom: 15.8,
+    maxBounds: REGION,
+    minZoom: 7,
     maxZoom: 20,
     pitchWithRotate: false,
     dragRotate: false,
     attributionControl: { compact: true },
-    canvasContextAttributes: { antialias: false },
   });
   map.touchZoomRotate.disableRotation();
   map.addControl(
     new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 85 }),
     'bottom-left',
   );
-  map.on('moveend', () => {
-    onMove(map.getBounds(), map.getCenter());
-    $('legend-driveway').hidden = map.getZoom() < 16.5;
-  });
-  map.on('movestart', () => onHover(null));
-  let ready = false;
-  let items = [],
+  let ready = false,
+    items = [],
     selected = null;
-  function setItems(records) {
+  let dark = document.documentElement.dataset.theme === 'dark';
+  function setTheme(value) {
+    dark = value;
+    if (!ready) return;
+    applyBasemapTheme(map, dark);
+    map.setPaintProperty(
+      'access-gap',
+      'line-color',
+      dark ? '#263238' : '#f2f0e9',
+    );
+    map.setPaintProperty(
+      'access-routes',
+      'line-color',
+      dark ? '#f8a79c' : '#a35754',
+    );
+    map.setPaintProperty('zone-edges', 'line-color', lineColour(dark));
+    map.setPaintProperty('zones', 'fill-color', lineColour(dark));
+  }
+  function setItems(records, force = false) {
+    if (
+      !force &&
+      ready &&
+      items.length === records.length &&
+      items.every((r, i) => r === records[i])
+    )
+      return;
     items = records;
     if (!ready) return;
     const points = [],
-      areas = [];
+      lines = [],
+      driveways = [];
     for (const r of records) {
-      const prop = {
-        id: r.id,
-        kind: r.kind,
-        rank: r.kind === 'garage' ? 0 : r.kind === 'meter' ? 2 : 3,
-      };
-      if (r.geometry.type === 'Point') points.push(feature(r.geometry, prop));
-      else areas.push(feature(r.geometry, prop));
+      (r.geometry.type === 'Point' ? points : lines).push(feature(r));
+      if (r.driveways)
+        for (const entrance of r.driveways)
+          driveways.push(drivewayLine(entrance));
     }
+    map.getSource('connections').setData(collection(driveways));
     map.getSource('parking').setData(collection(points));
-    map.getSource('kerb-shapes').setData(collection(areas));
+    map.getSource('kerb-shapes').setData(collection(lines));
   }
   function highlight(r) {
     selected = r;
     if (ready)
       map
         .getSource('selected-location')
-        .setData(
-          collection(
-            r ? [feature({ type: 'Point', coordinates: r.point }, {})] : [],
-          ),
-        );
+        .setData(collection(r ? [feature(r)] : []));
   }
+  function moved() {
+    onMove(map.getBounds(), map.getCenter());
+    $('legend-driveway').hidden = map.getZoom() < 16.5;
+  }
+  map.on('moveend', moved);
+  map.on('movestart', () => onHover(null));
   map.on('load', () => {
-    ['garage', 'mobility', 'meter', 'kerb', 'section'].forEach((k) =>
-      markerImage(map, k),
-    );
-    for (const id of ['parking', 'kerb-shapes', 'selected-location'])
-      map.addSource(id, { type: 'geojson', data: collection([]) });
+    ['garage', 'mobility'].forEach((k) => markerImage(map, k));
+    map.addSource('parking', {
+      type: 'geojson',
+      data: collection([]),
+      cluster: true,
+      clusterMaxZoom: 12,
+      clusterRadius: 34,
+    });
+    for (const id of ['kerb-shapes', 'connections', 'selected-location'])
+      map.addSource(id, {
+        type: 'geojson',
+        data: collection([]),
+        tolerance: 0.1,
+        maxzoom: 18,
+      });
     map.addLayer({
       id: 'zones',
       type: 'fill',
       source: 'kerb-shapes',
       filter: ['==', ['geometry-type'], 'Polygon'],
+      paint: { 'fill-color': lineColour(dark), 'fill-opacity': 0.42 },
+    });
+    map.addLayer({
+      id: 'selected-kerb',
+      type: 'line',
+      source: 'selected-location',
+      filter: ['!=', ['geometry-type'], 'Point'],
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: {
-        'fill-color': [
-          'match',
-          ['get', 'kind'],
-          'section',
-          '#4da679',
-          '#c8872d',
-        ],
-        'fill-opacity': 0.55,
+        'line-color': '#d6fa91',
+        'line-width': 9,
+        'line-offset': offset,
       },
     });
     map.addLayer({
       id: 'zone-edges',
       type: 'line',
       source: 'kerb-shapes',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: {
-        'line-color': [
-          'match',
-          ['get', 'kind'],
-          'section',
-          '#18745c',
-          '#aa681e',
-        ],
-        'line-width': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          12,
-          1.6,
-          15,
-          3.3,
-          18,
-          5.5,
-        ],
+        'line-color': lineColour(dark),
+        'line-width': width,
+        'line-offset': offset,
+      },
+    });
+    // Keep access crossings legible where the cartographic kerb line passes over them.
+    map.addLayer({
+      id: 'access-gap',
+      type: 'line',
+      source: 'connections',
+      minzoom: 16.5,
+      paint: { 'line-color': dark ? '#263238' : '#f2f0e9', 'line-width': 6 },
+    });
+    if (map.getLayer('driveways')) map.moveLayer('driveways');
+    map.addLayer({
+      id: 'access-routes',
+      type: 'line',
+      source: 'connections',
+      minzoom: 16.5,
+      paint: {
+        'line-color': dark ? '#f8a79c' : '#a35754',
+        'line-width': 2.5,
+        'line-dasharray': [1.5, 1],
       },
     });
     map.addLayer({
-      id: 'parking-selection',
+      id: 'selected-point',
       type: 'circle',
       source: 'selected-location',
+      filter: ['==', ['geometry-type'], 'Point'],
       paint: {
-        'circle-radius': 20,
-        'circle-color': '#e1f7a5',
+        'circle-radius': 21,
+        'circle-color': '#d6fa91',
         'circle-opacity': 0.7,
-        'circle-stroke-color': '#3b5c3d',
-        'circle-stroke-width': 2,
       },
     });
     map.addLayer({
-      id: 'parking-dots',
-      type: 'circle',
+      id: 'groups',
       source: 'parking',
+      type: 'circle',
+      filter: ['has', 'point_count'],
       paint: {
-        'circle-color': [
-          'match',
-          ['get', 'kind'],
-          'garage',
-          '#345ed3',
-          'mobility',
-          '#8050aa',
-          '#007e72',
-        ],
-        'circle-radius': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          11,
-          1.7,
-          15,
-          3.6,
-          18,
-          5,
-        ],
-        'circle-stroke-width': 0.8,
-        'circle-stroke-color': 'white',
+        'circle-radius': ['step', ['get', 'point_count'], 13, 20, 16, 100, 19],
+        'circle-color': '#3e58a9',
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#dae5ff',
       },
+    });
+    map.addLayer({
+      id: 'group-labels',
+      source: 'parking',
+      type: 'symbol',
+      filter: ['has', 'point_count'],
+      layout: {
+        'text-field': ['get', 'point_count_abbreviated'],
+        'text-size': 12,
+        'text-font': ['Noto Sans Bold'],
+        'text-allow-overlap': true,
+        'text-ignore-placement': true,
+      },
+      paint: { 'text-color': 'white' },
     });
     map.addLayer({
       id: 'parking-symbols',
       type: 'symbol',
       source: 'parking',
+      filter: ['!', ['has', 'point_count']],
       layout: {
         'icon-image': ['get', 'kind'],
-        'symbol-sort-key': ['get', 'rank'],
-        'icon-allow-overlap': false,
-        'icon-ignore-placement': false,
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.7, 15, 1],
         'icon-padding': 2,
-        'icon-size': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          11,
-          0.65,
-          14,
-          0.94,
-          17,
-          1.1,
-        ],
       },
     });
     ready = true;
-    setItems(items);
+    setItems(items, true);
     highlight(selected);
-    onMove(map.getBounds(), map.getCenter());
+    setTheme(document.documentElement.dataset.theme === 'dark');
+    moved();
   });
   function hit(p) {
     if (!ready) return;
-    // Prefer the visible marker before trying a wider touch target.
-    for (const box of [
+    const layers = [
+      'parking-symbols',
+      'zone-edges',
+      'zones',
+      'groups',
+      'driveways',
+      'access-routes',
+    ];
+    for (const target of [
       p,
       [
-        [p.x - 4, p.y - 4],
-        [p.x + 4, p.y + 4],
+        [p.x - 3, p.y - 3],
+        [p.x + 3, p.y + 3],
       ],
     ]) {
-      const hits = map.queryRenderedFeatures(box, { layers: pointLayers });
-      const found =
-        hits.find((f) => f.layer.id === 'parking-symbols') || hits[0];
-      if (found) return found.properties.id;
+      const hits = map.queryRenderedFeatures(target, { layers });
+      if (hits.length) return hits[0];
     }
-    if (
-      map.getLayer('driveways') &&
-      map.queryRenderedFeatures(
-        [
-          [p.x - 3, p.y - 3],
-          [p.x + 3, p.y + 3],
-        ],
-        { layers: ['driveways'] },
-      ).length
-    )
-      return 'driveway';
   }
   map.on('mousemove', (e) => {
-    const id = hit(e.point);
-    map.getCanvas().style.cursor = id ? 'pointer' : '';
-    onHover(id, e.point);
+    const f = hit(e.point);
+    map.getCanvas().style.cursor = f ? 'pointer' : '';
+    onHover(
+      ['driveways', 'access-routes'].includes(f?.layer.id)
+        ? 'driveway'
+        : f?.properties.id,
+      e.point,
+    );
   });
   map.getCanvas().addEventListener('mouseleave', () => onHover(null));
-  map.on('click', (e) => {
-    const id = hit(e.point);
+  map.on('click', async (e) => {
+    const f = hit(e.point);
     onHover(null);
-    if (id === 'driveway') onDriveway();
-    else if (id) onPick(id);
+    if (!f) return;
+    if (['driveways', 'access-routes'].includes(f.layer.id))
+      onDriveway(f.properties.way);
+    else if (f.layer.id === 'groups') {
+      const zoom = await map
+        .getSource('parking')
+        .getClusterExpansionZoom(f.properties.cluster_id);
+      map.easeTo({
+        center: f.geometry.coordinates,
+        zoom: Math.max(zoom, map.getZoom() + 1),
+      });
+    } else onPick(f.properties.id);
   });
   $('zoomin').onclick = () => map.zoomIn();
   $('zoomout').onclick = () => map.zoomOut();
-  $('resetmap').onclick = () => map.easeTo({ center: HOME, zoom: 14.2 });
   let positionMarker, statusTimer;
   function status(message) {
     clearTimeout(statusTimer);
@@ -294,11 +374,11 @@ export async function parkingMap({ onMove, onPick, onHover, onDriveway }) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const point = [pos.coords.longitude, pos.coords.latitude];
-        if (!new maplibregl.LngLatBounds(...CITY).contains(point)) {
-          status('Your location is outside the Sydney map.');
+        if (!new maplibregl.LngLatBounds(...REGION).contains(point)) {
+          status('Your location is outside Greater Sydney.');
           return;
         }
-        positionMarker ??= new maplibregl.Marker({ color: '#126a88' });
+        positionMarker ??= new maplibregl.Marker({ color: '#236cb4' });
         positionMarker.setLngLat(point).addTo(map);
         map.easeTo({ center: point, zoom: 17 });
         $('map-status').hidden = true;
@@ -315,10 +395,14 @@ export async function parkingMap({ onMove, onPick, onHover, onDriveway }) {
   return {
     setItems,
     highlight,
+    setTheme,
+    goTo: (point, zoom = 15) =>
+      map.easeTo({ center: point, zoom, duration: 380 }),
+    overview: () => map.fitBounds(OVERVIEW, { padding: 24, duration: 480 }),
     focus: (r) =>
       map.easeTo({
         center: r.point,
-        zoom: Math.max(map.getZoom(), 16.9),
+        zoom: Math.max(map.getZoom(), 17.5),
         duration: 380,
       }),
     bounds: () => map.getBounds(),

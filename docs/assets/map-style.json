@@ -1,6 +1,6 @@
 {
   "version": 8,
-  "name": "Sydney street atlas",
+  "name": "Greater Sydney street atlas",
   "glyphs": "assets/basemap/glyphs/{fontstack}/{range}.pbf",
   "sources": {
     "city": {
@@ -8,16 +8,17 @@
       "tiles": [
         "assets/basemap/tiles/{z}/{x}/{y}.pbf"
       ],
-      "minzoom": 10,
+      "minzoom": 7,
       "maxzoom": 14,
       "bounds": [
-        151.14,
-        -33.94,
-        151.255,
-        -33.835
+        149.95,
+        -34.36,
+        151.66,
+        -32.97
       ],
       "attribution": "<a href=\"https://openfreemap.org/\">OpenFreeMap</a> · © <a href=\"https://openmaptiles.org/\">OpenMapTiles</a> · © <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap contributors</a>"
-    }
+    },
+    "centres": {"type":"geojson","data":{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[151.10059,-33.70402]},"properties":{"name":"Hornsby"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[150.69417,-33.75119]},"properties":{"name":"Penrith"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[150.82062,-34.06369]},"properties":{"name":"Campbelltown"}}]}}
   },
   "layers": [
     {"id":"land","type":"background","paint":{"background-color":"#edece7"}},
@@ -43,7 +44,9 @@
     {"id":"park-names","type":"symbol","source":"city","source-layer":"park","minzoom":12.5,"filter":["all",["has","name"],["==",["geometry-type"],"Point"]],"layout":{"text-field":["coalesce",["get","name:en"],["get","name_en"],["get","name"]],"text-font":["Noto Sans Regular"],"text-size":["interpolate",["exponential",1.45],["zoom"],13,11,17,14],"text-max-width":9,"text-padding":6,"text-letter-spacing":0.025},"paint":{"text-color":"#537758","text-halo-color":"#e4eddc","text-halo-width":1.2,"text-halo-blur":0.5}},
     {"id":"landmark-names","type":"symbol","source":"city","source-layer":"poi","minzoom":14.75,"filter":["all",["match",["get","class"],["art_gallery","town_hall","theatre","museum","cathedral"],true,false],["has","name"]],"layout":{"text-field":["coalesce",["get","name:en"],["get","name_en"],["get","name"]],"text-font":["Noto Sans Regular"],"text-size":11,"text-max-width":9,"text-padding":6,"text-letter-spacing":0.025},"paint":{"text-color":"#776e69","text-halo-color":"#fbfaf6","text-halo-width":1.2}},
     {"id":"garden-names","type":"symbol","source":"city","source-layer":"poi","minzoom":12.5,"filter":["all",["has","name"],["match",["get","class"],["park","garden"],true,false]],"layout":{"text-field":["coalesce",["get","name:en"],["get","name_en"],["get","name"]],"text-font":["Noto Sans Regular"],"text-size":["interpolate",["exponential",1.45],["zoom"],13,11,17,14],"text-max-width":9,"text-padding":6,"text-letter-spacing":0.025},"paint":{"text-color":"#537758","text-halo-color":"#e4eddc","text-halo-width":1.2,"text-halo-blur":0.5}},
-    {"id":"city-name","type":"symbol","source":"city","source-layer":"place","minzoom":10,"filter":["==",["get","class"],"city"],"layout":{"text-field":["coalesce",["get","name:en"],["get","name_en"],["get","name"]],"text-font":["Noto Sans Bold"],"text-transform":"uppercase","text-letter-spacing":0.18,"text-size":["interpolate",["linear"],["zoom"],10,13,15,19],"text-max-width":12,"text-padding":10},"paint":{"text-color":"#62706e","text-halo-color":"#f9faf6","text-halo-width":2,"text-halo-blur":0.8},"maxzoom":15.3},
+    {"id":"regional-towns","type":"symbol","source":"city","source-layer":"place","minzoom":7,"filter":["all",["match",["get","class"],["town","village"],true,false],["match",["get","name"],["Hornsby","Penrith","Campbelltown"],false,true]],"layout":{"text-font":["Noto Sans Regular"],"text-field":["coalesce",["get","name:en"],["get","name"]],"text-size":["interpolate",["linear"],["zoom"],7,11,11,13],"text-padding":5},"paint":{"text-color":"#697572","text-halo-color":"#fcfbf5","text-halo-width":1.2,"text-halo-blur":0.5},"maxzoom":11},
+    {"id":"regional-centres","type":"symbol","source":"centres","minzoom":7,"layout":{"text-font":["Noto Sans Bold"],"text-field":["coalesce",["get","name:en"],["get","name"]],"text-size":["interpolate",["linear"],["zoom"],7,11,11,13],"text-padding":8,"text-variable-anchor":["top","bottom","right","left"],"text-radial-offset":0.45},"paint":{"text-color":"#4c5d63","text-halo-color":"#fbfaf6","text-halo-width":1.8},"maxzoom":11},
+    {"id":"city-name","type":"symbol","source":"city","source-layer":"place","minzoom":7,"filter":["==",["get","class"],"city"],"layout":{"text-field":["coalesce",["get","name:en"],["get","name_en"],["get","name"]],"text-font":["Noto Sans Bold"],"text-transform":"uppercase","text-letter-spacing":0.18,"text-size":["interpolate",["linear"],["zoom"],10,13,15,19],"text-max-width":12,"text-padding":10},"paint":{"text-color":"#62706e","text-halo-color":"#f9faf6","text-halo-width":2,"text-halo-blur":0.8},"maxzoom":15.3},
     {"id":"harbour-names","type":"symbol","source":"city","source-layer":"water_name","minzoom":11,"filter":["has","name"],"layout":{"text-field":["coalesce",["get","name:en"],["get","name_en"],["get","name"]],"text-font":["Noto Sans Regular"],"text-size":["interpolate",["exponential",1.45],["zoom"],12,11,15,14],"text-letter-spacing":0.09,"text-max-width":10},"paint":{"text-color":"#507e93","text-halo-color":"#c6e1eb","text-halo-width":1.2,"text-halo-blur":0.5}},
     {"id":"suburb-names","type":"symbol","source":"city","source-layer":"place","minzoom":11,"filter":["match",["get","class"],["suburb","quarter","neighbourhood","borough","town"],true,false],"layout":{"text-field":["coalesce",["get","name:en"],["get","name_en"],["get","name"]],"text-font":["Noto Sans Bold"],"text-transform":"uppercase","text-letter-spacing":0.14,"text-size":["interpolate",["exponential",1.45],["zoom"],11,10,15,12.5,18,15],"text-max-width":12,"text-padding":10},"paint":{"text-color":"#697572","text-halo-color":"#fcfbf5","text-halo-width":1.2,"text-halo-blur":0.5}}
   ]

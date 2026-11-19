@@ -11,21 +11,18 @@ const escape = (value) =>
       ],
   );
 const labels = {
-  meter: 'Parking meter',
   mobility: 'Mobility bay',
   garage: 'Car park',
   kerb: '2018 loading zone',
-  section: 'Street section',
+  section: 'Street side',
 };
 const icons = {
-  meter: 'meter',
   mobility: 'mobility',
   garage: 'parking',
   kerb: 'loading',
   section: 'road',
 };
 const toggles = {
-  meter: 'meters',
   mobility: 'mobility',
   garage: 'garages',
   kerb: 'historical',
@@ -75,6 +72,9 @@ let savedMode = false,
   garagesDate = '',
   loaded = false,
   failed = false;
+let places = [],
+  destinationMatches = [],
+  initialOpened = false;
 let bookmarks;
 try {
   bookmarks = new Set(
@@ -87,6 +87,22 @@ function midpoint(geometry) {
   if (geometry.type === 'Point') return geometry.coordinates;
   let points = geometry.coordinates;
   while (Array.isArray(points[0][0])) points = points[0];
+  if (geometry.type.endsWith('LineString')) {
+    const lengths = points
+      .slice(1)
+      .map(([x, y], i) =>
+        Math.hypot((x - points[i][0]) * 0.83, y - points[i][1]),
+      );
+    let remaining = lengths.reduce((sum, n) => sum + n, 0) / 2;
+    for (let i = 0; i < lengths.length; i++) {
+      if (remaining <= lengths[i])
+        return points[i].map(
+          (v, j) =>
+            v + ((points[i + 1][j] - v) * remaining) / (lengths[i] || 1),
+        );
+      remaining -= lengths[i];
+    }
+  }
   const middle = points.reduce(
     ([x, y], [lon, lat]) => [x + lon, y + lat],
     [0, 0],
@@ -101,22 +117,24 @@ function distance(r) {
 function describe(r) {
   return r.kind === 'garage'
     ? r.address
-    : r.kind === 'meter'
-      ? [r.area, r.location.split(' · ')[0]].filter(Boolean).join(' · ')
-      : r.location || r.area;
+    : [r.area, r.location].filter(Boolean).join(' · ');
 }
 function tag(r) {
-  return '<span class="label ' + r.kind + '">' + labels[r.kind] + '</span>';
+  const label =
+    r.source === 'waverley'
+      ? 'Kerb survey · 2021'
+      : r.communityMapped
+        ? 'Mapped car park'
+        : labels[r.kind];
+  return '<span class="label ' + r.kind + '">' + escape(label) + '</span>';
+}
+function capacityText(r) {
+  return r.capacity == null
+    ? 'Capacity unknown'
+    : fmt(r.capacity) + ' ' + (r.capacityKind || 'total spaces');
 }
 function secondTag(r) {
-  if (r.kind === 'garage')
-    return r.capacity == null ? '' : fmt(r.capacity) + ' total bays';
-  if (r.kind === 'meter') {
-    const first = r.rules[0] || '';
-    if (/out of operation|shut down/i.test(first)) return 'Meter offline';
-    if (/15 minutes free|Free 15-minute/i.test(first)) return '15 min free';
-    if (r.spaces != null) return '≈ ' + r.spaces + ' bays';
-  }
+  if (r.kind === 'garage' && r.capacity != null) return capacityText(r);
   if (r.kind === 'mobility' && r.spaces != null)
     return r.spaces + (r.spaces === 1 ? ' bay' : ' bays');
   return '';
@@ -137,8 +155,7 @@ function saveButton(r) {
 }
 function card(r) {
   const extra = secondTag(r);
-  const rule =
-    r.kind === 'meter' ? r.rules.find((t) => t.includes(' · ')) : null;
+  const rule = r.kind === 'section' ? r.rules[0] : null;
   return (
     '<article class="card"><button class="row-main" data-open="' +
     escape(r.id) +
@@ -182,7 +199,14 @@ function renderRows(reset = false) {
             ? 2
             : 3;
   visible = active
-    .filter((r) => savedMode || query || !bounds || bounds.contains(r.point))
+    .filter(
+      (r) =>
+        savedMode ||
+        query ||
+        !bounds ||
+        bounds.contains(r.point) ||
+        (r.extent && bounds.intersects(r.extent)),
+    )
     .sort(
       (a, b) =>
         relevance(a) - relevance(b) ||
@@ -228,7 +252,7 @@ function filter(reset = true) {
   map?.setItems(active);
   $('legend-historical').hidden =
     !checked('historical') && !active.some((r) => r.kind === 'kerb');
-  $('legend-section').hidden = !active.some((r) => r.kind === 'section');
+  updateDestinations();
   renderRows(reset);
 }
 function showSavedCount() {
@@ -247,6 +271,11 @@ function bookmark(id) {
   if (selected?.id === id) drawDetail(selected);
 }
 function closeDetail() {
+  const url = new URL(location.href);
+  if (url.searchParams.has('id')) {
+    url.searchParams.delete('id');
+    history.replaceState(null, '', url);
+  }
   selected = null;
   map?.highlight(null);
   $('detail').hidden = true;
@@ -261,20 +290,32 @@ function drawDetail(r) {
       '<h2>Capacity</h2><p class="note">' +
       (r.capacity == null
         ? 'Total capacity is unpublished in this listing.'
-        : '<strong>' + fmt(r.capacity) + ' total spaces</strong>') +
+        : '<strong>' + escape(capacityText(r)) + '</strong>') +
       '</p>' +
       (r.capacityUrl ? srcLink(r.capacityUrl, r.capacitySource) : '') +
       (r.occupancyNote
         ? '<p class="note">' + escape(r.occupancyNote) + '</p>'
         : '') +
-      '<p class="note">Live vacancies and hourly counts are unknown.</p><h2>Opening hours</h2><p class="note">' +
+      (r.availabilityUrl
+        ? '<p>' +
+          srcLink(
+            r.availabilityUrl,
+            'Check live availability with Transport for NSW',
+          ) +
+          '</p>'
+        : '<p class="note">Live vacancies and hourly counts are unknown.</p>') +
+      '<h2>Opening hours</h2><p class="note">' +
       escape(
         r.hours || 'Check the operator for current entry and exit times.',
       ) +
       '</p>';
+    if (r.conditions?.length)
+      content +=
+        '<h2>Mapped conditions</h2><ul class="detail-rules">' +
+        r.conditions.map((t) => '<li>' + escape(t) + '</li>').join('') +
+        '</ul>';
   } else {
     const heading = {
-      meter: 'Published meter hours',
       mobility: 'Bay restrictions',
       kerb: '2018 loading hours',
       section: 'Mapped street rules',
@@ -288,14 +329,17 @@ function drawDetail(r) {
     if (r.spaces != null)
       content +=
         '<p class="note">' +
-        (r.kind === 'meter'
-          ? 'Approximate bays served by this meter'
-          : r.kind === 'kerb'
-            ? 'Spaces in the 2018 survey'
-            : 'Designated spaces') +
+        (r.kind === 'kerb' ? 'Spaces in the 2018 survey' : 'Recorded spaces') +
         ' · <strong>' +
         fmt(r.spaces) +
         '</strong></p>';
+    if (r.driveways?.length)
+      content +=
+        '<p class="note">' +
+        r.driveways.length +
+        ' mapped driveway ' +
+        (r.driveways.length === 1 ? 'connection' : 'connections') +
+        ' on this side. Keep access clear.</p>';
     if (r.audited)
       content += '<p class="note">Council audit · ' + date(r.audited) + '</p>';
     content +=
@@ -329,16 +373,18 @@ function drawDetail(r) {
       r.url || sources[r.source]?.url,
       isGarage ? r.source : sources[r.source]?.name || 'View source',
     ) +
-    (isGarage && r.locationUrl !== r.url
+    (isGarage && r.locationUrl && r.locationUrl !== r.url
       ? '<p>' +
         srcLink(r.locationUrl, r.locationSource || 'Location source') +
         '</p>'
       : '') +
     '<p class="footnote">' +
     (isGarage
-      ? 'Listing reviewed · ' + date(r.reviewed || garagesDate)
+      ? r.communityMapped
+        ? 'OSM extract · ' + date(r.asOf)
+        : 'Listing reviewed · ' + date(r.reviewed || garagesDate)
       : r.kind === 'section'
-        ? 'OSM extract · ' + date(sources[r.source].fileDate)
+        ? 'Source file · ' + date(sources[r.source].fileDate)
         : 'Data retrieved · ' + date(retrieved)) +
     '</p>';
 }
@@ -351,10 +397,13 @@ function showDetail(id, focusMap) {
   $('detail').hidden = false;
   $('detail').scrollTop = 0;
   map?.highlight(r);
+  const url = new URL(location.href);
+  url.searchParams.set('id', r.id);
+  history.replaceState(null, '', url);
   if (focusMap) map?.focus(r);
   $('detail').querySelector('[data-back]').focus({ preventScroll: true });
 }
-function showDriveway() {
+function showDriveway(way) {
   closeDetail();
   $('finder').hidden = true;
   $('detail').hidden = false;
@@ -363,7 +412,9 @@ function showDriveway() {
     icon('back') +
     ' Back to results</button><h1>Mapped driveway</h1><p class="note">Keep the vehicle access clear. The dashed line follows the mapped driveway. Its width at the kerb is unknown.</p><p class="note">Other driveways may be missing.</p>' +
     srcLink(
-      'https://www.openstreetmap.org/copyright',
+      way
+        ? 'https://www.openstreetmap.org/way/' + encodeURIComponent(way)
+        : 'https://www.openstreetmap.org/copyright',
       'OpenStreetMap contributors',
     );
   $('detail').scrollTop = 0;
@@ -383,10 +434,10 @@ function hover(id, p) {
       const lines =
         r.kind === 'garage'
           ? [
-              r.capacity == null
-                ? 'Capacity unknown'
-                : fmt(r.capacity) + ' total spaces',
-              'Live vacancies unknown',
+              capacityText(r),
+              r.availabilityUrl
+                ? 'Live availability on the Transport for NSW site'
+                : 'Live vacancies unknown',
             ]
           : r.rules;
       box.innerHTML =
@@ -394,6 +445,7 @@ function hover(id, p) {
         '<strong>' +
         escape(r.name) +
         '</strong>' +
+        (r.kind === 'section' ? '<p>' + escape(r.location) + '</p>' : '') +
         lines.map((l) => '<p>' + escape(l) + '</p>').join('');
     } else if (id === 'driveway')
       box.innerHTML =
@@ -435,25 +487,142 @@ function mode(saved) {
     .forEach((b) => b.setAttribute('aria-pressed', b.dataset.type === type));
   filter();
 }
+function updateDestinations() {
+  destinationMatches =
+    savedMode || query.length < 2
+      ? []
+      : places
+          .filter((p) => normal(p.name).startsWith(query))
+          .sort(
+            (a, b) =>
+              Number(normal(b.name) === query) -
+                Number(normal(a.name) === query) ||
+              a.name.localeCompare(b.name),
+          )
+          .slice(0, 4);
+  const list = $('destinations');
+  list.hidden = !destinationMatches.length;
+  list.innerHTML = destinationMatches
+    .map(
+      (p, i) =>
+        '<button data-place="' +
+        i +
+        '">' +
+        icon('pin') +
+        escape(p.name) +
+        '<small>Show area</small></button>',
+    )
+    .join('');
+}
+function jump(p) {
+  areaMenu(false);
+  mode(false);
+  if (!map) {
+    $('query').value = p.name;
+    query = normal(p.name);
+    filter();
+    return;
+  }
+  map.goTo(p.point, 15.8);
+  const url = new URL(location.href);
+  url.searchParams.set('area', p.name);
+  url.searchParams.delete('id');
+  history.replaceState(null, '', url);
+}
+function areaMenu(open) {
+  $('areas').hidden = !open;
+  $('resetmap').setAttribute('aria-expanded', open);
+  if (open) layers(false);
+}
+const quickAreas = [
+  'Hornsby',
+  'Penrith',
+  'Campbelltown',
+  'Parramatta',
+  'Sydney',
+  'Bondi Beach',
+];
+$('area-options').innerHTML =
+  '<button data-region>Regional overview</button>' +
+  quickAreas
+    .map(
+      (name) =>
+        '<button data-area="' +
+        name +
+        '">' +
+        (name === 'Sydney' ? 'Sydney CBD' : name) +
+        '</button>',
+    )
+    .join('');
+$('resetmap').onclick = () => areaMenu($('areas').hidden);
+$('area-options').onclick = (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.hasAttribute('data-region')) {
+    areaMenu(false);
+    mode(false);
+    map?.overview();
+    history.replaceState(null, '', location.pathname);
+    return;
+  }
+  const p = places.find((p) => p.name === b.dataset.area);
+  if (p) jump(p);
+};
+$('destinations').onclick = (e) => {
+  const b = e.target.closest('[data-place]');
+  if (b) jump(destinationMatches[Number(b.dataset.place)]);
+};
+function openInitialArea() {
+  if (!loaded || !map || initialOpened) return;
+  initialOpened = true;
+  const params = new URLSearchParams(location.search);
+  const area = places.find(
+    (p) => normal(p.name) === normal(params.get('area') || ''),
+  );
+  if (area) jump(area);
+  const id = params.get('id');
+  if (byId.has(id)) {
+    const r = byId.get(id);
+    $(toggles[r.kind]).checked = true;
+    filter();
+    showDetail(id, true);
+  }
+}
+function applyTheme(dark) {
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  const button = $('theme');
+  button.innerHTML = dark ? icon('sun') : icon('moon');
+  button.title = button.ariaLabel = dark
+    ? 'Switch to light mode'
+    : 'Switch to dark mode';
+  map?.setTheme(dark);
+}
+applyTheme(document.documentElement.dataset.theme === 'dark');
+$('theme').onclick = () => {
+  const dark = document.documentElement.dataset.theme !== 'dark';
+  applyTheme(dark);
+  try {
+    localStorage.setItem('kerb-atlas-theme', dark ? 'dark' : 'light');
+  } catch {}
+};
 function sourceInfo() {
-  const street = records.filter((r) => r.kind === 'meter').length,
-    mobility = records.filter((r) => r.kind === 'mobility').length,
-    garage = records.filter((r) => r.kind === 'garage').length;
+  const streets = records.filter((r) => r.kind === 'section').length;
+  const garage = records.filter((r) => r.kind === 'garage').length;
   $('source-details').innerHTML =
-    '<h3>Street parking</h3><p>' +
-    fmt(street) +
-    ' council meters show tariffs, hours and stay limits. A meter pin describes that machine. Sign changes, unmetered spaces, temporary restrictions and driveway widths have incomplete coverage. Unlisted hours are unknown.</p><p>Green street sections show OpenStreetMap rules for the specified side or sides. A road centreline marks the mapped extent. Check the sign at the exact bay.</p>' +
-    '<p>' +
-    fmt(mobility) +
-    ' mobility locations include the council audit date where published. The optional loading-zone layer shows a 2018 survey.</p>' +
+    '<h3>Street sides</h3><p>' +
+    fmt(streets) +
+    ' mapped street-side records across Greater Sydney. A coloured line identifies a recorded side or bay. Hover or tap it for conditions. Unmarked roads have unknown coverage.</p>' +
+    '<p>OpenStreetMap lines are offset to the recorded side of travel. Waverley Council lines use its 2021 kerb survey. Line positions and endpoints are approximate. Signs, driveway openings and temporary controls still need checking on site.</p>' +
     '<h3>Car parks</h3><p>' +
     fmt(garage) +
-    ' public car park listings. Total capacity is shown where a source gives a figure. Each listing links to its source.</p>' +
-    '<h3>Driveways</h3><p>Zoom in to see mapped driveway routes as dashed red lines. A gap in the map is unverified.</p>' +
-    '<h3>Sources and dates</h3><p class="footnote">Council and transport data retrieved ' +
-    date(retrieved) +
-    '.</p><ul>' +
+    ' mapped facilities. Capacities describe the bays recorded by each source. Selected Park&amp;Ride listings link to Transport for NSW for current availability.</p>' +
+    '<h3>Other layers</h3><p>Zoom in for known driveway access routes. The optional City of Sydney mobility layer includes council audit dates. Loading zones show a historical 2018 survey.</p>' +
+    '<h3>Sources</h3><ul>' +
     Object.values(sources)
+      .filter(
+        (source, i, all) =>
+          all.findIndex((other) => other.url === source.url) === i,
+      )
       .map(
         (s) =>
           '<li>' +
@@ -472,6 +641,11 @@ $('query').oninput = (e) => {
   filter();
 };
 $('query').onkeydown = (e) => {
+  if (e.key === 'Enter' && destinationMatches.length) {
+    e.preventDefault();
+    jump(destinationMatches[0]);
+    return;
+  }
   if (e.key === 'Enter' && visible.length) {
     e.preventDefault();
     showDetail(visible[0].id, true);
@@ -508,6 +682,7 @@ $('sidebar').addEventListener('click', (e) => {
   }
 });
 function layers(open) {
+  if (open) areaMenu(false);
   $('layers').hidden = !open;
   $('layers-button').setAttribute('aria-expanded', open);
 }
@@ -518,10 +693,12 @@ $('layers').onchange = () => {
 };
 document.addEventListener('pointerdown', (e) => {
   if (!e.target.closest('#layers,#layers-button')) layers(false);
+  if (!e.target.closest('#areas,#resetmap')) areaMenu(false);
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     layers(false);
+    areaMenu(false);
     hover(null);
   }
 });
@@ -556,17 +733,29 @@ async function json(url) {
   return res.json();
 }
 async function initData() {
-  const [k, g, sections] = await Promise.all([
+  const [k, g, sections, waverley, suburbs] = await Promise.all([
     json('./data/kerbs.json'),
     json('./data/garages.json'),
     json('./data/street-sections.json'),
+    json('./data/waverley.json'),
+    json('./data/suburbs.json'),
   ]);
-  sources = { ...k.sources, ...sections.sources, councilGarages: g.sources[0] };
+  sources = {
+    ...k.sources,
+    ...sections.sources,
+    ...waverley.sources,
+    suburbs: suburbs.source,
+  };
+  g.sources
+    .filter((s) => s.licenseUrl)
+    .forEach((s, i) => (sources['garages' + i] = s));
+  places = suburbs.places;
   retrieved = k.retrieved;
   garagesDate = g.updated;
   records = [
     ...k.features,
     ...sections.features,
+    ...waverley.features,
     ...g.features.map((r) => ({
       ...r,
       id: 'garage-' + r.id,
@@ -576,17 +765,36 @@ async function initData() {
   ];
   for (const r of records) {
     r.point = midpoint(r.geometry);
+    if (r.geometry.type !== 'Point') {
+      const box = [
+        [180, 90],
+        [-180, -90],
+      ];
+      function extend(c) {
+        if (typeof c[0] === 'number') {
+          box[0][0] = Math.min(box[0][0], c[0]);
+          box[0][1] = Math.min(box[0][1], c[1]);
+          box[1][0] = Math.max(box[1][0], c[0]);
+          box[1][1] = Math.max(box[1][1], c[1]);
+        } else c.forEach(extend);
+      }
+      extend(r.geometry.coordinates);
+      r.extent = box;
+    }
     r.searchName = normal(r.name);
     r.search = normal(
-      [r.name, r.area, r.location, r.address, labels[r.kind]]
+      [r.name, r.area, r.suburb, r.location, r.address, labels[r.kind]]
         .filter(Boolean)
         .join(' '),
     );
     byId.set(r.id, r);
   }
   loaded = true;
+  bookmarks = new Set([...bookmarks].filter((id) => byId.has(id)));
+  showSavedCount();
   sourceInfo();
   filter();
+  openInitialArea();
 }
 initData().catch(() => {
   failed = true;
@@ -611,6 +819,7 @@ parkingMap({
     bounds = m.bounds();
     centre = m.center();
     filter();
+    openInitialArea();
   })
   .catch(() => {
     $('map-status').hidden = false;

@@ -1,43 +1,43 @@
 # Kerb Atlas
 
-A free, static parking map for the City of Sydney. Search a street, suburb or facility, then hover or tap a map feature to see its source and parking details. Bookmarks stay in the browser. The optional location button uses the device's location to centre the map.
+[Open the Greater Sydney parking map](https://craigrusselltiu.github.io/sydney-parking-map/)
 
-## Run locally
+Hover or tap a coloured line to read the rules recorded for that side of the street. Open a car park to see its published capacity, opening hours or live availability link where supplied. The map starts at street level in Hornsby. The Greater Sydney menu includes Penrith, Campbelltown, the Sydney CBD and a regional overview. Search also supports 938 suburbs and localities. The theme button switches the map and interface between dark and light. Theme and saved locations stay in the browser.
 
-From this directory, run:
+## Coverage and accuracy
+
+- **Geography.** The regional datasets use the Australian Bureau of Statistics 2026 Greater Sydney boundary (GCCSA 1GSYD). Coverage varies by suburb. [ABS boundary](https://geo.abs.gov.au/arcgis/rest/services/ASGS2026/GCCSA/MapServer/0)
+- **Road sides.** OpenStreetMap records supply original road geometry and separate left/right rules. A visual offset identifies the recorded side. Bay polygons have their own footprint. Green means parking was mapped there, amber indicates conditions, red indicates a recorded restriction and grey indicates unverified details. A colour does not establish permission at the current time. Hours are shown only where recorded. [OpenStreetMap data](https://www.openstreetmap.org/copyright)
+- **Council kerb lines.** Waverley Council's 2021 survey supplies 2,373 kerb sections with sign text and street side. The importer excludes all 7,623 rows marked “no parking data”, including rows with a placeholder “No parking” value. Updated upload dates do not make an older survey current. [Council dataset](https://opendata.transport.nsw.gov.au/dataset/waverley-council-data)
+- **Driveways.** Tagged access routes appear at close zoom. Where a driveway shares a mapped node with a tagged road side, a contrasting break marks the connection. The line width is cartographic. Unrecorded driveways, driveway widths and temporary restrictions still need checking on site.
+- **Car parks.** Listings combine operators, councils, Transport for NSW Park&Ride and explicitly public OpenStreetMap facilities. Source dates appear on each record. Capacity can mean all spaces or standard bays as labelled. Park&Ride listings link to TfNSW's current availability. [Transport Park&Ride](https://transportnsw.info/travel-info/ways-to-get-around/drive/parking/transport-parkride-car-parks)
+- **Other layers.** City of Sydney mobility bay locations and 278 historical loading zones are optional. The loading-zone source file dates to 2018. [Council mobility data](https://www.arcgis.com/home/item.html?id=2671fdce3f354b3e8f02236ca12271cb) · [Loading-zone survey](https://opendata.transport.nsw.gov.au/dataset/loading-zones-kerbside)
+
+Campbelltown has mapped car parks. Public on-street rules remain particularly sparse there. TfNSW announced the decommissioning of its original on-street parking feed after the vendor stopped providing live observations. A blank kerb is unknown. [TfNSW service notice](https://opendataforum.transport.nsw.gov.au/t/on-street-parking-api/4020)
+
+## Hosting and local use
+
+GitHub Pages serves the static files from **main → /docs**. The parking overlays use local snapshots. The regional overview and detail tiles around Hornsby, Penrith, Campbelltown and central Sydney are bundled. Other detailed basemap tiles load from OpenFreeMap on demand. The app needs no account, API key or backend. Browsers without WebGL can use the parking directory.
+
+To run locally, use:
 
 ```sh
 python -m http.server 8000 --bind 127.0.0.1 --directory docs
 ```
 
-Open [the map](http://127.0.0.1:8000/). The site uses MapLibre GL JS, local vector tiles, a local font and three small parking data files. No build, API key or backend is required. Browsers without WebGL can still use the searchable directory.
+Open [the local map](http://127.0.0.1:8000/).
 
-## GitHub Pages
+## Refreshing data
 
-Push this repository to GitHub and set **Settings → Pages → Deploy from a branch → main → /docs**. The checked-in files use relative paths, including map tiles and fonts, so the site can run under a repository subpath. Changes to `docs/` deploy through Pages.
+Download the [NSW OpenStreetMap extract](https://download.geofabrik.de/australia-oceania/australia/new-south-wales.html). The regional importers clip it to Greater Sydney and share a local cache of official ABS polygons. Review changes in counts, source dates and coverage before committing a refresh.
 
-## Coverage
+```sh
+python -m pip install osmium shapely pyshp pyproj
+python scripts/street_sections.py /path/to/new-south-wales-latest.osm.pbf --cache /path/to/abs-cache
+python scripts/garages.py /path/to/new-south-wales-latest.osm.pbf --cache /path/to/abs-cache
+python scripts/waverley.py
+python scripts/kerbs.py
+python scripts/basemap.py
+```
 
-| Layer | What the map shows | Accuracy boundary |
-| --- | --- | --- |
-| Council meters | 1,375 meter locations with published tariff periods, fees, maximum stays and approximate bay counts where supplied | Meter hours apply at the machine. The records do not identify every sign boundary or determine permission outside the published hours. |
-| Street sections | 50 road sections with explicit mapped conditions and 7 street-side bay locations | A line follows the mapped road centre. Rules identify the side and direction where recorded. Community coverage is sparse. |
-| Mobility | 365 locations, with council audit dates and sign text where recorded | Some audits date to 2017. Verify the current signs. |
-| Driveways | Explicitly tagged driveway access routes at close zoom | Road lines do not measure the width of a kerb opening. More entrances exist on the ground. |
-| Public car parks | 33 operator- or venue-checked facilities, 20 with sourced total capacities | Figures can come from dated reports. No live or hourly vacancy series is available in this release. |
-| Historical loading zones | 278 polygons from a 2018 TfNSW source file | This optional layer is off by default. Use it as a historical reference. |
-
-The initial parking snapshots were retrieved on 19 November 2026. Source links appear on each record. A blank area has unknown coverage. Meter totals and mapped bays can refer to the same physical space, so their counts must not be added to estimate citywide capacity.
-
-A complete parking-permission map would need a maintained inventory of sign panels, arrows, kerb endpoints, driveway openings, temporary controls and field verification. Live vacancies and typical occupancy need facility-specific feeds or observations with timestamps. The publicly documented NSW occupancy API covers selected Transport Park&Ride facilities. [NSW Car Park API](https://opendata.transport.nsw.gov.au/dataset/car-park-api)
-
-## Refresh the snapshots
-
-Run a script from the repository root, review its output and changes in source dates and counts, then commit the updated snapshot. Dates on historical observations and reports remain distinct from retrieval dates.
-
-- `python scripts/kerbs.py` fetches City of Sydney meter and mobility records and the TfNSW loading-zone archive. [Meters](https://www.arcgis.com/home/item.html?id=71bb12507a3240c4b12e7fbba5be58e1) · [Mobility bays](https://www.arcgis.com/home/item.html?id=2671fdce3f354b3e8f02236ca12271cb) · [Loading zones](https://opendata.transport.nsw.gov.au/dataset/loading-zones-kerbside)
-- `python scripts/street_sections.py /path/to/Sydney.osm.pbf` builds the attributed ODbL street section extract. Install Python packages `osmium` and `shapely` for this script. It uses the City of Sydney boundary and explicitly tagged restrictions. [Sydney OSM extract](https://download.bbbike.org/osm/bbbike/Sydney/)
-- `python scripts/garages.py` refreshes the curated public car park directory. Recheck operator listings and capacity evidence before updating review dates or adding a facility. Some facilities use attributed OSM geometry. Sources and licences are in [the garage snapshot](docs/data/garages.json).
-- `python scripts/basemap.py` refreshes the local OpenFreeMap tiles and glyphs. [Basemap credits and licence](docs/assets/basemap/CREDITS.md)
-
-Council data is attributed to the City of Sydney and loading zones to Transport for NSW. The street section extract and downloaded OpenStreetMap tiles are available under the Open Database Licence. MapLibre GL JS and the DM Sans font retain their licences in [assets](docs/assets/).
+The street, garage, suburb and council snapshots carry their own attribution and licences. MapLibre GL JS and the DM Sans font retain their licences in the assets directory. [Basemap credits](docs/assets/basemap/CREDITS.md)

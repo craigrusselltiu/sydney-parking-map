@@ -1,6 +1,16 @@
 <!doctype html>
 <html lang="en-AU">
   <head>
+    <script>
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem('kerb-atlas-theme') === 'light'
+            ? 'light'
+            : 'dark';
+      } catch {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    </script>
     <meta charset="utf-8" />
     <meta
       name="viewport"
@@ -9,9 +19,9 @@
     <meta name="theme-color" content="#152b31" />
     <meta
       name="description"
-      content="Explore Sydney parking meters, mobility bays and public car parks. Check published parking hours, capacity and source details."
+      content="Explore Greater Sydney street-side parking rules, driveways and public car parks. Check published parking hours, capacity and source details."
     />
-    <title>Kerb Atlas · Sydney parking map</title>
+    <title>Kerb Atlas · Greater Sydney parking map</title>
     <link rel="icon" href="./assets/mark.svg" />
     <link rel="stylesheet" href="./assets/maplibre-gl.css" />
     <link rel="stylesheet" href="./style.css" />
@@ -35,7 +45,14 @@
         </button>
       </nav>
       <div class="header-end">
-        <span id="clock"></span
+        <button
+          id="theme"
+          class="theme-btn"
+          aria-label="Switch colour theme"
+          title="Switch colour theme"
+        >
+          ◐</button
+        ><span id="clock"></span
         ><button class="about-button" id="about">
           <i data-i="info"></i><span>About the data</span>
         </button>
@@ -45,7 +62,7 @@
       <aside id="sidebar" aria-label="Parking explorer">
         <section id="finder">
           <div class="intro">
-            <div class="eyebrow"><i data-i="pin"></i> SYDNEY, NSW</div>
+            <div class="eyebrow"><i data-i="pin"></i> GREATER SYDNEY, NSW</div>
             <h1 id="page-title">Find parking</h1>
             <div class="search">
               <i data-i="search"></i
@@ -56,6 +73,7 @@
                 aria-label="Search a street, suburb or car park"
               />
             </div>
+            <div class="destinations" id="destinations" hidden></div>
             <div class="tabs" aria-label="Parking type">
               <button data-type="all" aria-pressed="true">All</button
               ><button data-type="street" aria-pressed="false">
@@ -83,11 +101,13 @@
         <div class="map-top">
           <button
             id="resetmap"
+            aria-controls="areas"
+            aria-expanded="false"
             class="map-location"
-            title="Return to Sydney CBD"
-            aria-label="Return to Sydney CBD"
+            title="Choose an area"
+            aria-label="Choose an area"
           >
-            <span class="locator"></span><span>City of Sydney</span></button
+            <span class="locator"></span><span>Greater Sydney ▾</span></button
           ><button
             id="layers-button"
             aria-controls="layers"
@@ -97,23 +117,30 @@
             <i data-i="layers"></i><span>Layers</span>
           </button>
         </div>
+        <section
+          id="areas"
+          hidden
+          class="float-panel areas-panel"
+          aria-label="Jump to an area"
+        >
+          <h2>Jump to an area</h2>
+          <div id="area-options"></div>
+        </section>
         <section id="layers" hidden class="float-panel" aria-label="Map layers">
           <h2>Map layers</h2>
           <label
-            ><input id="meters" type="checkbox" checked /> Parking meters</label
-          >
-          <label
-            ><input id="mobility" type="checkbox" checked /> Mobility
-            bays</label
+            ><input id="sections" type="checkbox" checked /> Street-side
+            rules</label
           >
           <label
             ><input id="garages" type="checkbox" checked /> Public car
             parks</label
           >
           <label
-            ><input id="sections" type="checkbox" checked /> Street
-            sections</label
-          ><label
+            ><input id="mobility" type="checkbox" /> Mobility bay
+            locations</label
+          >
+          <label
             ><input id="historical" type="checkbox" /> Loading zones
             <small>2018 survey</small></label
           >
@@ -136,13 +163,15 @@
           </div>
         </div>
         <div class="legend">
-          <span><b class="legend-street"></b>Meter</span
-          ><span><b class="legend-mobility"></b>Mobility</span
-          ><span><b class="legend-park">P</b>Car park</span
-          ><span id="legend-section"><b class="legend-section"></b>Section</span
-          ><span id="legend-driveway" hidden
+          <span><b class="legend-section"></b>Parking</span>
+          <span><b class="legend-timed"></b>Conditions</span>
+          <span><b class="legend-restricted"></b>Restricted</span>
+          <span><b class="legend-park">P</b>Car park</span>
+          <span><b class="legend-unknown"></b>Unverified</span>
+          <span id="legend-driveway" hidden
             ><b class="legend-driveway"></b>Driveway</span
-          ><span id="legend-historical" hidden
+          >
+          <span id="legend-historical" hidden
             ><b class="legend-historical"></b>2018 zone</span
           >
         </div>
